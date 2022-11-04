@@ -4,6 +4,9 @@
  * binding behavior.
  * Rory Kelly
  * 3 May 2017
+ * --
+ * Added support for heterogenrous numbers of threads/rank
+ * 3 Nov 2022
  */
 #define _GNU_SOURCE
 #define STRLEN 80
@@ -28,8 +31,8 @@ int main(int argc, char **argv){
   char *all_strs;         // per-thread strings for all processes
   char node_name[STRLEN]; // the node where process / thread is executing
   int length;             // length of returned string
-  int *offsets;
-  int *recvcts;
+  int *offsets;           // offsets for the MPIGatherv call
+  int *recvcts;           // receive counts for the MPIGatherv call
 
   // initialize MPI and get information about the numbers of ranks,
   // threads, and execution hosts
@@ -42,26 +45,28 @@ int main(int argc, char **argv){
   MPI_Gather(&n_omp, 1, MPI_INT, thrds_for_rank, 1, MPI_INT, 0, MPI_COMM_WORLD); 
   MPI_Reduce(&n_omp, &total_omp, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
+  // allocate space to hold a string from each thread for this rank
   thrd_str = (char*) malloc(n_omp * STRLEN * sizeof(char));
+
+  // allocate space on rank 0 to hold all strings from all threads
+  // of all ranks. Calculate necessary offsets and receive counts
+  // to gather the strings to rank 0
   if (mpi_id == 0){
      printf("Total threads: %d\n",total_omp);
      for (int i=0; i<n_mpi; i++){
-	     printf("Rank %d has %d threads\n",i,thrds_for_rank[i]);
+	     printf("  Rank %d has %d threads\n",i,thrds_for_rank[i]);
      }
-     //all_strs = malloc(n_mpi * n_omp * STRLEN * sizeof(char));
+     printf("--- --- --- --- ---\n");
      all_strs = (char*) malloc(total_omp * STRLEN * sizeof(char));
      offsets = (int*) malloc(n_mpi * sizeof(int));
      recvcts = (int*) malloc(n_mpi * sizeof(int));
      offsets[0] = 0;
      recvcts[0] = thrds_for_rank[0]*STRLEN;
      for(int i=1; i<n_mpi; i++){
-        //offsets[i] = i*n_omp*STRLEN;
-	//recvcts[i] = n_omp*STRLEN;
 	offsets[i] = offsets[i-1]+thrds_for_rank[i-1]*STRLEN;
         recvcts[i] = thrds_for_rank[i]*STRLEN;
      }
   }
-
 
   // Collect MPI Rank, OpenMP thread, and execution CPU on host
   #pragma omp parallel private(omp_id, n_omp, my_cpu) shared(thrd_str)
@@ -73,9 +78,6 @@ int main(int argc, char **argv){
      if (omp_id == 0){
         sprintf(&thrd_str[STRLEN * omp_id], "MPI Task %3d, OpenMP thread %d of %d (cpu %d of %s)", mpi_id, omp_id, n_omp, my_cpu, node_name);
      } else {
-	if(mpi_id == 0){
-		printf("BLAARG: %d, %d, %d, %s\n",omp_id, n_omp, my_cpu, node_name);
-	}
         sprintf(&thrd_str[STRLEN * omp_id], "              OpenMP thread %d of %d (cpu %d of %s)", omp_id, n_omp, my_cpu, node_name);
      }
   }
@@ -83,7 +85,6 @@ int main(int argc, char **argv){
   // gather to rank 0 and print in order
   MPI_Gatherv(thrd_str, n_omp*STRLEN, MPI_CHAR, all_strs, recvcts, offsets, MPI_CHAR, 0, MPI_COMM_WORLD);
   if (mpi_id == 0){
-        //for(int j=0; j<n_mpi*n_omp; j++){
 	for(int j=0; j<total_omp; j++){
 	   puts(&all_strs[j*STRLEN]);
         }
