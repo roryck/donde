@@ -51,11 +51,13 @@ int main(int argc, char **argv){
      //all_strs = malloc(n_mpi * n_omp * STRLEN * sizeof(char));
      all_strs = (char*) malloc(total_omp * STRLEN * sizeof(char));
      offsets = (int*) malloc(n_mpi * sizeof(int));
-     recvcts = (int*) malloc(n_mpi * sizeof(int)); 
-     for(int i=0; i<n_mpi; i++){
+     recvcts = (int*) malloc(n_mpi * sizeof(int));
+     offsets[0] = 0;
+     recvcts[0] = thrds_for_rank[0]*STRLEN;
+     for(int i=1; i<n_mpi; i++){
         //offsets[i] = i*n_omp*STRLEN;
 	//recvcts[i] = n_omp*STRLEN;
-	offsets[i] = i*thrds_for_rank[i]*STRLEN;
+	offsets[i] = offsets[i-1]+thrds_for_rank[i-1]*STRLEN;
         recvcts[i] = thrds_for_rank[i]*STRLEN;
      }
   }
@@ -71,6 +73,9 @@ int main(int argc, char **argv){
      if (omp_id == 0){
         sprintf(&thrd_str[STRLEN * omp_id], "MPI Task %3d, OpenMP thread %d of %d (cpu %d of %s)", mpi_id, omp_id, n_omp, my_cpu, node_name);
      } else {
+	if(mpi_id == 0){
+		printf("BLAARG: %d, %d, %d, %s\n",omp_id, n_omp, my_cpu, node_name);
+	}
         sprintf(&thrd_str[STRLEN * omp_id], "              OpenMP thread %d of %d (cpu %d of %s)", omp_id, n_omp, my_cpu, node_name);
      }
   }
