@@ -1,3 +1,7 @@
 b.sh
 balanced
 mpibind2
+affinity.*
+*.out
+*.log
+donde

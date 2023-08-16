@@ -36,7 +36,7 @@ int main(int argc, char **argv){
 
   // initialize MPI and get information about the numbers of ranks,
   // threads, and execution hosts
-  MPI_Init_thread(&argc, &argv, MPI_THREAD_FUNNELED, &mpi_tsup_lev);
+  MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &mpi_tsup_lev);
   MPI_Comm_size(MPI_COMM_WORLD, &n_mpi);
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
   MPI_Get_processor_name(node_name, &length);
