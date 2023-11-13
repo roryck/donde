@@ -1,5 +1,5 @@
-CC = cc
-CFLAGS = -O2 -fopenmp
+CC = mpicc
+CFLAGS = -O2 -fopenmp -std=c99
 
 all: 
 	$(CC) $(CFLAGS) -o donde donde.c 

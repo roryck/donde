@@ -9,7 +9,6 @@
  * 3 Nov 2022
  */
 #define _GNU_SOURCE
-#define STRLEN 80
 #include <stdio.h>
 #include <stdlib.h>
 #include <sched.h>
@@ -29,14 +28,14 @@ int main(int argc, char **argv){
   int *thrds_for_rank;    // array w/ # threads for each rank, used buy rank 0
   char *thrd_str;         // per-thread output strings
   char *all_strs;         // per-thread strings for all processes
-  char node_name[STRLEN]; // the node where process / thread is executing
+  char node_name[MPI_MAX_PROCESSOR_NAME]; // the node where process / thread is executing
   int length;             // length of returned string
   int *offsets;           // offsets for the MPIGatherv call
   int *recvcts;           // receive counts for the MPIGatherv call
 
   // initialize MPI and get information about the numbers of ranks,
   // threads, and execution hosts
-  MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &mpi_tsup_lev);
+  MPI_Init_thread(&argc, &argv, MPI_THREAD_SERIALIZED, &mpi_tsup_lev);
   MPI_Comm_size(MPI_COMM_WORLD, &n_mpi);
   MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
   MPI_Get_processor_name(node_name, &length);
@@ -46,7 +45,7 @@ int main(int argc, char **argv){
   MPI_Reduce(&n_omp, &total_omp, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
   // allocate space to hold a string from each thread for this rank
-  thrd_str = (char*) malloc(n_omp * STRLEN * sizeof(char));
+  thrd_str = (char*) malloc(n_omp * MPI_MAX_PROCESSOR_NAME * sizeof(char));
 
   // allocate space on rank 0 to hold all strings from all threads
   // of all ranks. Calculate necessary offsets and receive counts
@@ -57,14 +56,14 @@ int main(int argc, char **argv){
 	     printf("  Rank %d has %d threads\n",i,thrds_for_rank[i]);
      }
      printf("--- --- --- --- ---\n");
-     all_strs = (char*) malloc(total_omp * STRLEN * sizeof(char));
+     all_strs = (char*) malloc(total_omp * MPI_MAX_PROCESSOR_NAME * sizeof(char));
      offsets = (int*) malloc(n_mpi * sizeof(int));
      recvcts = (int*) malloc(n_mpi * sizeof(int));
      offsets[0] = 0;
-     recvcts[0] = thrds_for_rank[0]*STRLEN;
+     recvcts[0] = thrds_for_rank[0]*MPI_MAX_PROCESSOR_NAME;
      for(int i=1; i<n_mpi; i++){
-	offsets[i] = offsets[i-1]+thrds_for_rank[i-1]*STRLEN;
-        recvcts[i] = thrds_for_rank[i]*STRLEN;
+	offsets[i] = offsets[i-1]+thrds_for_rank[i-1]*MPI_MAX_PROCESSOR_NAME;
+        recvcts[i] = thrds_for_rank[i]*MPI_MAX_PROCESSOR_NAME;
      }
   }
 
@@ -76,17 +75,17 @@ int main(int argc, char **argv){
      my_cpu = sched_getcpu();
 
      if (omp_id == 0){
-        sprintf(&thrd_str[STRLEN * omp_id], "MPI Task %3d, OpenMP thread %d of %d (cpu %d of %s)", mpi_id, omp_id, n_omp, my_cpu, node_name);
+        sprintf(&thrd_str[MPI_MAX_PROCESSOR_NAME * omp_id], "MPI Task %3d, OpenMP thread %d of %d (cpu %d of %s)", mpi_id, omp_id, n_omp, my_cpu, node_name);
      } else {
-        sprintf(&thrd_str[STRLEN * omp_id], "              OpenMP thread %d of %d (cpu %d of %s)", omp_id, n_omp, my_cpu, node_name);
+        sprintf(&thrd_str[MPI_MAX_PROCESSOR_NAME * omp_id], "              OpenMP thread %d of %d (cpu %d of %s)", omp_id, n_omp, my_cpu, node_name);
      }
   }
 
   // gather to rank 0 and print in order
-  MPI_Gatherv(thrd_str, n_omp*STRLEN, MPI_CHAR, all_strs, recvcts, offsets, MPI_CHAR, 0, MPI_COMM_WORLD);
+  MPI_Gatherv(thrd_str, n_omp*MPI_MAX_PROCESSOR_NAME, MPI_CHAR, all_strs, recvcts, offsets, MPI_CHAR, 0, MPI_COMM_WORLD);
   if (mpi_id == 0){
 	for(int j=0; j<total_omp; j++){
-	   puts(&all_strs[j*STRLEN]);
+	   puts(&all_strs[j*MPI_MAX_PROCESSOR_NAME]);
         }
   } 
   return MPI_Finalize();
